@@ -4,8 +4,7 @@ import com.ghost.entity.KnowledgeDocument;
 import com.ghost.repository.KnowledgeDocumentRepository;
 import org.springframework.stereotype.Service;
 
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -23,20 +22,45 @@ public class RetrievalService {
             return List.of();
         }
 
-        String[] keywords = query.toLowerCase()
-                .split("\\s+");
+        Set<String> keywords = Arrays.stream(query.toLowerCase().trim().split("\\s+"))
+                .filter(word -> word.length() > 2)
+                .collect(Collectors.toSet());
 
         return repository.findAll()
                 .stream()
-                .filter(document -> {
+                .map(document -> new ScoredDocument(
+                        document,
+                        calculateScore(document, keywords)))
+                .filter(result -> result.score() > 0)
+                .sorted(Comparator.comparingInt(ScoredDocument::score).reversed())
+                .map(ScoredDocument::document)
+                .toList();
+    }
 
-                    String searchableText =
-                            (document.getTitle() + " " +
-                             document.getContent()).toLowerCase();
+    private int calculateScore(
+            KnowledgeDocument document,
+            Set<String> keywords) {
 
-                    return Arrays.stream(keywords)
-                            .anyMatch(searchableText::contains);
-                })
-                .collect(Collectors.toList());
+        String title = document.getTitle().toLowerCase();
+        String content = document.getContent().toLowerCase();
+
+        int score = 0;
+
+        for (String keyword : keywords) {
+            if (title.contains(keyword)) {
+                score += 3;
+            }
+
+            if (content.contains(keyword)) {
+                score += 1;
+            }
+        }
+
+        return score;
+    }
+
+    private record ScoredDocument(
+            KnowledgeDocument document,
+            int score) {
     }
 }
